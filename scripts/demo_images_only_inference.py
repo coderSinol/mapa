@@ -21,7 +21,7 @@ import rerun as rr
 import torch
 
 from mapanything.models import MapAnything
-from mapanything.utils.geometry import depthmap_to_world_frame
+from mapanything.utils.geometry import depthmap_to_camera_frame
 from mapanything.utils.image import load_images
 from mapanything.utils.viz import (
     predictions_to_glb,
@@ -174,7 +174,7 @@ def main():
     print("Outputs saved to /tmp/mapanything/outputs1.json")
 
     # Prepare lists for GLB export if needed
-    world_points_list = []
+    world_points_list = []  # Will contain camera coordinates (pts3d_cam)
     images_list = []
     masks_list = []
 
@@ -193,20 +193,26 @@ def main():
         intrinsics_torch = pred["intrinsics"][0]  # (3, 3)
         camera_pose_torch = pred["camera_poses"][0]  # (4, 4)
 
-        # Compute new pts3d using depth, intrinsics, and camera pose
-        pts3d_computed, valid_mask = depthmap_to_world_frame(
-            depthmap_torch, intrinsics_torch, camera_pose_torch
-        )
-
+        # Use camera coordinates - try pre-computed first, fallback to computing from depth
+        if "pts3d_cam" in pred:
+            # Use pre-computed camera coordinates from model output
+            pts3d_cam_torch = pred["pts3d_cam"][0]  # (H, W, 3)
+            valid_mask = depthmap_torch > 0.0
+        else:
+            # Compute camera coordinates from depth map and intrinsics
+            pts3d_cam_torch, valid_mask = depthmap_to_camera_frame(
+                depthmap_torch, intrinsics_torch
+            )
+        
         # Convert to numpy arrays
         mask = pred["mask"][0].squeeze(-1).cpu().numpy().astype(bool)
         mask = mask & valid_mask.cpu().numpy()  # Combine with valid depth mask
-        pts3d_np = pts3d_computed.cpu().numpy()
+        pts3d_np = pts3d_cam_torch.cpu().numpy()  # Use camera coordinates
         image_np = pred["img_no_norm"][0].cpu().numpy()
 
         # Store data for GLB export if needed
         if args.save_glb:
-            world_points_list.append(pts3d_np)
+            world_points_list.append(pts3d_np)  # Now contains camera coordinates
             images_list.append(image_np)
             masks_list.append(mask)
 
@@ -232,30 +238,31 @@ def main():
         print(f"Saving GLB file to: {args.output_path}")
 
         # Stack all views
-        world_points = np.stack(world_points_list, axis=0)
+        camera_points = np.stack(world_points_list, axis=0)  # Now contains camera coordinates
         images = np.stack(images_list, axis=0)
         final_masks = np.stack(masks_list, axis=0)
 
-        # Convert world_points to vertices_3d format and save as JSON
-        vertices_3d = world_points.reshape(-1, 3)
-        world_points_json_path = "/tmp/mapanything/world_points.json"
-        world_points_data = {
+        # Convert camera_points to vertices_3d format and save as JSON
+        vertices_3d = camera_points.reshape(-1, 3)
+        camera_points_json_path = "/tmp/mapanything/camera_points.json"
+        camera_points_data = {
             "vertices_3d": vertices_3d.tolist(),
             "metadata": {
-                "original_shape": list(world_points.shape),
+                "original_shape": list(camera_points.shape),
                 "vertices_shape": list(vertices_3d.shape),
-                "num_views": world_points.shape[0],
+                "num_views": camera_points.shape[0],
                 "total_vertices": vertices_3d.shape[0],
-                "description": "Flattened 3D vertices from all views, shape: (total_points, 3)"
+                "coordinate_system": "camera",
+                "description": "Flattened 3D vertices from all views in camera coordinates, shape: (total_points, 3)"
             }
         }
-        with open(world_points_json_path, 'w') as f:
-            json.dump(world_points_data, f, indent=2)
-        print(f"Vertices 3D saved to: {world_points_json_path}")
+        with open(camera_points_json_path, 'w') as f:
+            json.dump(camera_points_data, f, indent=2)
+        print(f"Camera coordinates saved to: {camera_points_json_path}")
 
         # Create predictions dict for GLB export
         predictions = {
-            "world_points": world_points,
+            "world_points": camera_points,  # Keep the key name for compatibility with predictions_to_glb
             "images": images,
             "final_masks": final_masks,
         }
