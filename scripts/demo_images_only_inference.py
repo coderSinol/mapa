@@ -11,6 +11,7 @@ Usage:
 """
 
 import argparse
+import json
 import os
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
@@ -154,6 +155,23 @@ def main():
         views, memory_efficient_inference=args.memory_efficient_inference
     )
     print("Inference complete!")
+
+    # Save outputs to JSON file
+    os.makedirs("/tmp/mapanything", exist_ok=True)
+    # Convert outputs to serializable format
+    serializable_outputs = []
+    for i, output in enumerate(outputs):
+        serializable_output = {}
+        for key, value in output.items():
+            if isinstance(value, torch.Tensor):
+                serializable_output[key] = value.cpu().numpy().tolist()
+            else:
+                serializable_output[key] = value
+        serializable_outputs.append(serializable_output)
+    
+    with open("/tmp/mapanything/outputs1.json", "w") as f:
+        json.dump(serializable_outputs, f, indent=2)
+    print("Outputs saved to /tmp/mapanything/outputs1.json")
 
     # Prepare lists for GLB export if needed
     world_points_list = []
