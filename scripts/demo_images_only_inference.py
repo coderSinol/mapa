@@ -236,6 +236,20 @@ def main():
         images = np.stack(images_list, axis=0)
         final_masks = np.stack(masks_list, axis=0)
 
+        # Save world_points as JSON
+        world_points_json_path = "/tmp/mapanything/world_points.json"
+        world_points_data = {
+            "world_points": world_points.tolist(),
+            "metadata": {
+                "shape": list(world_points.shape),
+                "num_views": world_points.shape[0],
+                "description": "3D world points from all views, shape: (num_views, height*width, 3)"
+            }
+        }
+        with open(world_points_json_path, 'w') as f:
+            json.dump(world_points_data, f, indent=2)
+        print(f"World points saved to: {world_points_json_path}")
+
         # Create predictions dict for GLB export
         predictions = {
             "world_points": world_points,
