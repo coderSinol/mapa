@@ -19,6 +19,7 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 import numpy as np
 import rerun as rr
 import torch
+from PIL import Image
 
 from mapanything.models import MapAnything
 from mapanything.utils.geometry import depthmap_to_camera_frame
@@ -205,10 +206,29 @@ def main():
             )
         
         # Convert to numpy arrays
-        mask = pred["mask"][0].squeeze(-1).cpu().numpy().astype(bool)
-        mask = mask & valid_mask.cpu().numpy()  # Combine with valid depth mask
+        original_mask = pred["mask"][0].squeeze(-1).cpu().numpy().astype(bool)
+        valid_mask_np = valid_mask.cpu().numpy()
+        mask = original_mask & valid_mask_np  # Combine with valid depth mask
         pts3d_np = pts3d_cam_torch.cpu().numpy()  # Use camera coordinates
         image_np = pred["img_no_norm"][0].cpu().numpy()
+
+        # Save masks as images
+        mask_save_dir = "/tmp/mapanything/masks"
+        os.makedirs(mask_save_dir, exist_ok=True)
+        
+        # Save original mask (from model prediction)
+        original_mask_img = Image.fromarray((original_mask * 255).astype(np.uint8))
+        original_mask_img.save(f"{mask_save_dir}/view_{view_idx:03d}_original_mask.png")
+        
+        # Save valid mask (depth > 0)
+        valid_mask_img = Image.fromarray((valid_mask_np * 255).astype(np.uint8))
+        valid_mask_img.save(f"{mask_save_dir}/view_{view_idx:03d}_valid_mask.png")
+        
+        # Save combined mask
+        combined_mask_img = Image.fromarray((mask * 255).astype(np.uint8))
+        combined_mask_img.save(f"{mask_save_dir}/view_{view_idx:03d}_combined_mask.png")
+        
+        print(f"Saved masks for view {view_idx} to {mask_save_dir}")
 
         # Store data for GLB export if needed
         if args.save_glb:
