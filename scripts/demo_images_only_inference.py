@@ -216,16 +216,16 @@ def main():
         mask_save_dir = "/tmp/mapanything/masks"
         os.makedirs(mask_save_dir, exist_ok=True)
         
-        # Save original mask (from model prediction)
-        original_mask_img = Image.fromarray((original_mask * 255).astype(np.uint8))
+        # Save original mask (from model prediction) - pure boolean
+        original_mask_img = Image.fromarray(original_mask.astype(np.uint8))
         original_mask_img.save(f"{mask_save_dir}/view_{view_idx:03d}_original_mask.png")
         
-        # Save valid mask (depth > 0)
-        valid_mask_img = Image.fromarray((valid_mask_np * 255).astype(np.uint8))
+        # Save valid mask (depth > 0) - pure boolean
+        valid_mask_img = Image.fromarray(valid_mask_np.astype(np.uint8))
         valid_mask_img.save(f"{mask_save_dir}/view_{view_idx:03d}_valid_mask.png")
         
-        # Save combined mask
-        combined_mask_img = Image.fromarray((mask * 255).astype(np.uint8))
+        # Save combined mask - pure boolean
+        combined_mask_img = Image.fromarray(mask.astype(np.uint8))
         combined_mask_img.save(f"{mask_save_dir}/view_{view_idx:03d}_combined_mask.png")
         
         print(f"Saved masks for view {view_idx} to {mask_save_dir}")
