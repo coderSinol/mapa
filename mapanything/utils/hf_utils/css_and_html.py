@@ -127,33 +127,6 @@ def get_description_html():
         str: HTML string for the description
     """
     return """
-    <div style="font-size: 16px; line-height: 1.5;">
-    <p>Upload a video or a set of images to create a 3D reconstruction of a scene or object. MapAnything takes these images and generates 3D point clouds directly from multi-view images.</p>
-    <p>This demo demonstrates the use of image inputs only. However, MapAnything is extremely flexible and supports any combination of inputs (images, calibration, poses & depth). For trying out memory efficient inference or additional inputs like cameras & depth, please check out the code in our <a href="https://github.com/facebookresearch/map-anything">Github repo</a>.</p>
-
-    <h3>Getting Started:</h3>
-    <ol>
-        <li><strong>Upload Your Data:</strong> Use the "Upload Video" or "Upload Images" buttons on the left to provide your input. Videos will be automatically split into individual frames (one frame per second).</li>
-        <li><strong>Preview:</strong> Your uploaded images will appear in the gallery on the left.</li>
-        <li><strong>Reconstruct:</strong> Click the "Reconstruct" button to start the 3D reconstruction process.</li>
-        <li><strong>Visualize:</strong> The 3D reconstruction will appear in the viewer on the right. You can rotate, pan, and zoom to explore the model, and download the GLB file. Note the visualization of 3D points may be slow for a large number of input images.</li>
-        <li>
-        <strong>Adjust Reconstruction & Visualization (Optional):</strong>
-        You can fine-tune the visualization using the options below the viewer
-        <details style="display:inline;">
-            <summary style="display:inline;">(<strong>click to expand</strong>):</summary>
-            <ul>
-            <li><em>Show Camera:</em> Toggle the display of estimated camera positions.</li>
-            <li><em>Show Mesh:</em> Use meshes for the prediction visualization.</li>
-            <li><em>Show Points from Frame:</em> Select specific frames to display in the viewer.</li>
-            <li><em>Filter Black Background:</em> Remove black background pixels.</li>
-            <li><em>Filter White Background:</em> Remove white background pixels.</li>
-            </ul>
-        </details>
-        </li>
-    </ol>
-    <p><strong style="color: #555555;">Please note:</strong> <span style="color: #555555;">The inference time changes based on the amount of input images, for e.g., less than 1 second for up to 50 views. However, downloading model weights and visualizing 3D points may take tens of seconds. Please be patient or, for faster visualization, use a local machine to run our demo from our <a href="https://github.com/facebookresearch/map-anything">GitHub repository</a>. </span></p>
-    </div>
     """
 
 
@@ -165,16 +138,7 @@ def get_acknowledgements_html():
         str: HTML string for the acknowledgements
     """
     return """
-    <hr style="margin-top: 40px; margin-bottom: 20px;">
-    <div style="text-align: center; font-size: 14px; color: #666; margin-bottom: 20px;">
-        <h3>Acknowledgements</h3>
-        <p>This site builds upon code from:</p>
-        <ul style="list-style: none; padding: 0;">
-            <li>🔗 <a href="https://github.com/microsoft/MoGe">MoGe (and MoGe2) on GitHub (and HuggingFace)</a></li>
-            <li>🔗 <a href="https://github.com/facebookresearch/vggt">VGGT on GitHub</a></li>
-        </ul>
-        <p>We extend our gratitude to these projects for their valuable contributions to the research community.</p>
-    </div>
+
     """
 
 
