@@ -204,28 +204,64 @@ def main():
             pts3d_cam_torch, valid_mask = depthmap_to_camera_frame(
                 depthmap_torch, intrinsics_torch
             )
+
+        # Convert to numpy arrays for visualization
+        # Check if mask key exists in pred, if not, fill with boolean trues in the size of depthmap_torch
+        if "mask" in pred:
+            original_mask = pred["mask"][0].squeeze(-1).cpu().numpy().astype(bool)
+        else:
+            # Fill with boolean trues in the size of depthmap_torch
+            original_mask = np.ones_like(depthmap_torch.cpu().numpy(), dtype=bool)
         
         # Convert to numpy arrays
-        original_mask = pred["mask"][0].squeeze(-1).cpu().numpy().astype(bool)
+        # original_mask = pred["mask"][0].squeeze(-1).cpu().numpy().astype(bool)
         valid_mask_np = valid_mask.cpu().numpy()
         mask = original_mask & valid_mask_np  # Combine with valid depth mask
         pts3d_np = pts3d_cam_torch.cpu().numpy()  # Use camera coordinates
         image_np = pred["img_no_norm"][0].cpu().numpy()
 
+        # Save depth map as image
+        depth_save_dir = "/tmp/mapanything/depth_maps"
+        os.makedirs(depth_save_dir, exist_ok=True)
+        
+        # Convert depth map to numpy and normalize for visualization
+        depthmap_np = depthmap_torch.cpu().numpy()
+        
+        # Normalize depth values to 0-255 range for saving as image
+        # Handle case where all depth values might be the same
+        if depthmap_np.max() > depthmap_np.min():
+            depth_normalized = (depthmap_np - depthmap_np.min()) / (depthmap_np.max() - depthmap_np.min())
+        else:
+            depth_normalized = np.zeros_like(depthmap_np)
+        
+        depth_img = (depth_normalized * 255).astype(np.uint8)
+        depth_pil = Image.fromarray(depth_img, mode='L')  # 'L' mode for grayscale
+        depth_pil.save(f"{depth_save_dir}/view_{view_idx:03d}_depth.png")
+        
+        # Also save raw depth values as numpy file for precise reconstruction
+        np.save(f"{depth_save_dir}/view_{view_idx:03d}_depth_raw.npy", depthmap_np)
+        
+        print(f"Saved depth map for view {view_idx} - Range: [{depthmap_np.min():.3f}, {depthmap_np.max():.3f}]")
+
         # Save masks as images
         mask_save_dir = "/tmp/mapanything/masks"
         os.makedirs(mask_save_dir, exist_ok=True)
         
-        # Save original mask (from model prediction) - pure boolean
-        original_mask_img = Image.fromarray(original_mask.astype(np.uint8))
+        # Debug: Print mask statistics
+        print(f"View {view_idx} - Original mask: {np.sum(original_mask)} True pixels out of {original_mask.size} total")
+        print(f"View {view_idx} - Valid mask: {np.sum(valid_mask_np)} True pixels out of {valid_mask_np.size} total")
+        print(f"View {view_idx} - Combined mask: {np.sum(mask)} True pixels out of {mask.size} total")
+        
+        # Save original mask (from model prediction) - convert boolean to 0/255
+        original_mask_img = Image.fromarray((original_mask * 255).astype(np.uint8))
         original_mask_img.save(f"{mask_save_dir}/view_{view_idx:03d}_original_mask.png")
         
-        # Save valid mask (depth > 0) - pure boolean
-        valid_mask_img = Image.fromarray(valid_mask_np.astype(np.uint8))
+        # Save valid mask (depth > 0) - convert boolean to 0/255
+        valid_mask_img = Image.fromarray((valid_mask_np * 255).astype(np.uint8))
         valid_mask_img.save(f"{mask_save_dir}/view_{view_idx:03d}_valid_mask.png")
         
-        # Save combined mask - pure boolean
-        combined_mask_img = Image.fromarray(mask.astype(np.uint8))
+        # Save combined mask - convert boolean to 0/255
+        combined_mask_img = Image.fromarray((mask * 255).astype(np.uint8))
         combined_mask_img.save(f"{mask_save_dir}/view_{view_idx:03d}_combined_mask.png")
         
         print(f"Saved masks for view {view_idx} to {mask_save_dir}")
