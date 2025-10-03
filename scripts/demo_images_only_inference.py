@@ -29,6 +29,181 @@ from mapanything.utils.viz import (
     script_add_rerun_args,
 )
 
+# Import additional libraries for floor detection
+try:
+    from scipy import ndimage
+    from sklearn.cluster import RANSAC
+    from sklearn.linear_model import LinearRegression
+    import cv2
+    FLOOR_DETECTION_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: Some packages for floor detection not available: {e}")
+    print("Install with: pip install scipy scikit-learn opencv-python")
+    FLOOR_DETECTION_AVAILABLE = False
+
+
+def detect_floor_from_depth(depthmap_np, pts3d_np, valid_mask, method='ransac'):
+    """
+    Detect floor plane from depth map and 3D points
+    
+    Args:
+        depthmap_np: Depth map as numpy array (H, W)
+        pts3d_np: 3D points in camera coordinates (H, W, 3)
+        valid_mask: Boolean mask for valid depth points (H, W)
+        method: 'ransac', 'lowest_plane', or 'gradient'
+    
+    Returns:
+        floor_mask: Boolean mask indicating floor pixels (H, W)
+        floor_info: Dictionary with floor detection information
+    """
+    height, width = depthmap_np.shape
+    floor_mask = np.zeros((height, width), dtype=bool)
+    
+    if method == 'ransac':
+        # Use RANSAC to fit a plane to 3D points
+        valid_points = pts3d_np[valid_mask]
+        
+        if len(valid_points) < 100:
+            print("Not enough valid points for RANSAC")
+            return floor_mask, {"method": method, "success": False}
+        
+        # Sample points for efficiency (use every Nth point)
+        sample_step = max(1, len(valid_points) // 10000)
+        sampled_points = valid_points[::sample_step]
+        
+        # Fit plane using RANSAC
+        # Floor is typically the largest horizontal plane
+        ransac = RANSAC(
+            LinearRegression(),
+            min_samples=3,
+            residual_threshold=0.1,  # 10cm tolerance
+            max_trials=1000
+        )
+        
+        try:
+            # Use XZ coordinates to fit Y (assuming Y is up/down in camera frame)
+            X = sampled_points[:, [0, 2]]  # X and Z coordinates
+            y = sampled_points[:, 1]       # Y coordinate
+            
+            ransac.fit(X, y)
+            
+            # Get plane parameters
+            coef = ransac.estimator_.coef_
+            intercept = ransac.estimator_.intercept_
+            
+            # Calculate distance of all valid points to the plane
+            valid_indices = np.where(valid_mask)
+            valid_pts_3d = pts3d_np[valid_indices]
+            
+            # Distance to plane: |ax + bz + c - y| / sqrt(a² + 1 + b²)
+            a, b = coef[0], coef[1]
+            c = intercept
+            
+            distances = np.abs(a * valid_pts_3d[:, 0] + b * valid_pts_3d[:, 2] + c - valid_pts_3d[:, 1])
+            distances = distances / np.sqrt(a**2 + 1 + b**2)
+            
+            # Points close to the plane are floor candidates
+            floor_threshold = 0.05  # 5cm tolerance
+            floor_point_mask = distances < floor_threshold
+            
+            # Map back to image coordinates
+            floor_indices = (valid_indices[0][floor_point_mask], valid_indices[1][floor_point_mask])
+            floor_mask[floor_indices] = True
+            
+            # Post-process: remove small disconnected regions
+            floor_mask = ndimage.binary_opening(floor_mask, structure=np.ones((3, 3)))
+            floor_mask = ndimage.binary_closing(floor_mask, structure=np.ones((5, 5)))
+            
+            return floor_mask, {
+                "method": method,
+                "success": True,
+                "plane_normal": np.array([a, -1, b]) / np.sqrt(a**2 + 1 + b**2),
+                "plane_distance": c,
+                "num_floor_pixels": np.sum(floor_mask)
+            }
+            
+        except Exception as e:
+            print(f"RANSAC failed: {e}")
+            return floor_mask, {"method": method, "success": False, "error": str(e)}
+    
+    elif method == 'lowest_plane':
+        # Simple heuristic: floor is typically at the bottom of the image with consistent depth
+        # Look at bottom portion of image
+        bottom_region = int(height * 0.7)  # Bottom 30% of image
+        bottom_depths = depthmap_np[bottom_region:, :]
+        bottom_valid = valid_mask[bottom_region:, :]
+        
+        if np.sum(bottom_valid) == 0:
+            return floor_mask, {"method": method, "success": False}
+        
+        # Find median depth in bottom region
+        bottom_depth_values = bottom_depths[bottom_valid]
+        median_depth = np.median(bottom_depth_values)
+        
+        # Floor pixels should be within some range of this median depth
+        depth_tolerance = 0.5  # 50cm tolerance
+        depth_mask = np.abs(depthmap_np - median_depth) < depth_tolerance
+        
+        # Combine with valid mask
+        floor_candidates = depth_mask & valid_mask
+        
+        # Focus on bottom half of image
+        floor_candidates[:height//2, :] = False
+        
+        # Morphological operations to clean up
+        kernel = np.ones((5, 5), np.uint8)
+        floor_candidates_clean = cv2.morphologyEx(
+            floor_candidates.astype(np.uint8), 
+            cv2.MORPH_OPEN, 
+            kernel
+        )
+        floor_candidates_clean = cv2.morphologyEx(
+            floor_candidates_clean, 
+            cv2.MORPH_CLOSE, 
+            kernel
+        )
+        
+        floor_mask = floor_candidates_clean.astype(bool)
+        
+        return floor_mask, {
+            "method": method,
+            "success": True,
+            "median_depth": median_depth,
+            "num_floor_pixels": np.sum(floor_mask)
+        }
+    
+    elif method == 'gradient':
+        # Use depth gradients - floor should have low gradient (relatively flat)
+        # Calculate gradients
+        grad_x = cv2.Sobel(depthmap_np, cv2.CV_64F, 1, 0, ksize=3)
+        grad_y = cv2.Sobel(depthmap_np, cv2.CV_64F, 0, 1, ksize=3)
+        gradient_magnitude = np.sqrt(grad_x**2 + grad_y**2)
+        
+        # Floor should have low gradient
+        low_gradient_threshold = np.percentile(gradient_magnitude[valid_mask], 20)
+        low_gradient_mask = gradient_magnitude < low_gradient_threshold
+        
+        # Combine with valid mask and focus on bottom portion
+        floor_candidates = low_gradient_mask & valid_mask
+        floor_candidates[:int(height * 0.5), :] = False  # Remove top half
+        
+        # Clean up with morphological operations
+        kernel = np.ones((7, 7), np.uint8)
+        floor_mask = cv2.morphologyEx(
+            floor_candidates.astype(np.uint8), 
+            cv2.MORPH_OPEN, 
+            kernel
+        ).astype(bool)
+        
+        return floor_mask, {
+            "method": method,
+            "success": True,
+            "gradient_threshold": low_gradient_threshold,
+            "num_floor_pixels": np.sum(floor_mask)
+        }
+    
+    return floor_mask, {"method": method, "success": False}
+
 
 def log_data_to_rerun(
     image, depthmap, pose, intrinsics, pts3d, mask, base_name, pts_name, viz_mask=None
@@ -119,6 +294,12 @@ def get_parser():
         type=str,
         default="output.glb",
         help="Output path for GLB file (default: output.glb)",
+    )
+    parser.add_argument(
+        "--detect_floor",
+        action="store_true",
+        default=True,
+        help="Enable floor detection from depth maps",
     )
 
     return parser
@@ -242,6 +423,57 @@ def main():
         np.save(f"{depth_save_dir}/view_{view_idx:03d}_depth_raw.npy", depthmap_np)
         
         print(f"Saved depth map for view {view_idx} - Range: [{depthmap_np.min():.3f}, {depthmap_np.max():.3f}]")
+
+        # Detect floor area from depth map
+        if args.detect_floor and FLOOR_DETECTION_AVAILABLE:
+            print(f"Detecting floor for view {view_idx}...")
+            
+            # Try different methods for floor detection
+            methods = ['ransac', 'lowest_plane', 'gradient']
+            floor_results = {}
+        
+        for method in methods:
+            floor_mask, floor_info = detect_floor_from_depth(depthmap_np, pts3d_np, valid_mask_np, method=method)
+            floor_results[method] = {'mask': floor_mask, 'info': floor_info}
+            
+            if floor_info['success']:
+                print(f"  {method}: Success - {floor_info.get('num_floor_pixels', 0)} floor pixels")
+            else:
+                print(f"  {method}: Failed")
+        
+        # Save floor detection results
+        floor_save_dir = "/tmp/mapanything/floor_detection"
+        os.makedirs(floor_save_dir, exist_ok=True)
+        
+        for method, result in floor_results.items():
+            if result['info']['success']:
+                # Save floor mask as image
+                floor_mask_img = (result['mask'] * 255).astype(np.uint8)
+                floor_pil = Image.fromarray(floor_mask_img, mode='L')
+                floor_pil.save(f"{floor_save_dir}/view_{view_idx:03d}_floor_{method}.png")
+                
+                # Create colored overlay on original image for visualization
+                overlay = image_np.copy()
+                floor_overlay = result['mask'][:, :, np.newaxis] * np.array([0, 255, 0])  # Green overlay
+                overlay = np.where(result['mask'][:, :, np.newaxis], 
+                                 0.7 * overlay + 0.3 * floor_overlay, 
+                                 overlay).astype(np.uint8)
+                overlay_pil = Image.fromarray(overlay)
+                overlay_pil.save(f"{floor_save_dir}/view_{view_idx:03d}_floor_{method}_overlay.png")
+        
+            # Save floor detection info as JSON
+            floor_info_path = f"{floor_save_dir}/view_{view_idx:03d}_floor_info.json"
+            serializable_floor_info = {}
+            for method, result in floor_results.items():
+                info_copy = result['info'].copy()
+                # Convert numpy arrays to lists for JSON serialization
+                for key, value in info_copy.items():
+                    if isinstance(value, np.ndarray):
+                        info_copy[key] = value.tolist()
+                serializable_floor_info[method] = info_copy
+            
+            with open(floor_info_path, 'w') as f:
+                json.dump(serializable_floor_info, f, indent=2)
 
         # Save masks as images
         mask_save_dir = "/tmp/mapanything/masks"
