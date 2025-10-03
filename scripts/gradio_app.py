@@ -1103,16 +1103,16 @@ with gr.Blocks(theme=theme, css=GRADIO_CSS) as demo:
 
     with gr.Row():
         with gr.Column(scale=2):
-            input_video = gr.Video(label="Upload Video", interactive=True)
-            s_time_interval = gr.Slider(
-                minimum=0.1,
-                maximum=5.0,
-                value=1.0,
-                step=0.1,
-                label="Sample time interval (take a sample every x sec.)",
-                interactive=True,
-                visible=True,
-            )
+            # input_video = gr.Video(label="Upload Video", interactive=True)
+            # s_time_interval = gr.Slider(
+            #     minimum=0.1,
+            #     maximum=5.0,
+            #     value=1.0,
+            #     step=0.1,
+            #     label="Sample time interval (take a sample every x sec.)",
+            #     interactive=True,
+            #     visible=True,
+            # )
             input_images = gr.File(
                 file_count="multiple", label="Upload Images", interactive=True
             )
@@ -1129,10 +1129,10 @@ with gr.Blocks(theme=theme, css=GRADIO_CSS) as demo:
         with gr.Column(scale=4):
             with gr.Column():
                 gr.Markdown(
-                    "**Metric 3D Reconstruction (Point Cloud and Camera Poses)**"
+                    "**3D Reconstruction**"
                 )
                 log_output = gr.Markdown(
-                    "Please upload a video or images, then click Reconstruct.",
+                    "Upload an image, then click Reconstruct.",
                     elem_classes=["custom-log"],
                 )
 
