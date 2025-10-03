@@ -325,9 +325,32 @@ def main():
         print("Loading CC-BY-NC 4.0 licensed MapAnything model...")
     model = MapAnything.from_pretrained(model_name).to(device)
 
-    # Load images
+    # Determine image size from the first image in the folder
+    print(f"Scanning images from: {args.image_folder}")
+    
+    # Get first image to determine size
+    import glob
+    from PIL import Image as PILImage
+    
+    # Find supported image files
+    image_extensions = ['*.jpg', '*.jpeg', '*.png', '*.JPG', '*.JPEG', '*.PNG']
+    image_files = []
+    for ext in image_extensions:
+        image_files.extend(glob.glob(os.path.join(args.image_folder, ext)))
+    
+    if not image_files:
+        raise ValueError(f"No supported images found in {args.image_folder}")
+    
+    # Get size from first image
+    first_image_path = sorted(image_files)[0]
+    with PILImage.open(first_image_path) as img:
+        original_width, original_height = img.size
+    
+    print(f"Detected image size: {original_width}x{original_height} from {os.path.basename(first_image_path)}")
+    
+    # Load images with detected size
     print(f"Loading images from: {args.image_folder}")
-    views = load_images(args.image_folder)
+    views = load_images(args.image_folder, resize_mode="fixed_size", size=(original_width, original_height))
     print(f"Loaded {len(views)} views")
 
     # Run model inference
