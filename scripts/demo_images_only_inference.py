@@ -32,8 +32,7 @@ from mapanything.utils.viz import (
 # Import additional libraries for floor detection
 try:
     from scipy import ndimage
-    from sklearn.cluster import RANSAC
-    from sklearn.linear_model import LinearRegression
+    from sklearn.linear_model import RANSAC, LinearRegression
     import cv2
     FLOOR_DETECTION_AVAILABLE = True
 except ImportError as e:
