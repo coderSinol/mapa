@@ -431,36 +431,36 @@ def main():
             # Try different methods for floor detection
             methods = ['ransac', 'lowest_plane', 'gradient']
             floor_results = {}
-        
-        for method in methods:
-            floor_mask, floor_info = detect_floor_from_depth(depthmap_np, pts3d_np, valid_mask_np, method=method)
-            floor_results[method] = {'mask': floor_mask, 'info': floor_info}
             
-            if floor_info['success']:
-                print(f"  {method}: Success - {floor_info.get('num_floor_pixels', 0)} floor pixels")
-            else:
-                print(f"  {method}: Failed")
-        
-        # Save floor detection results
-        floor_save_dir = "/tmp/mapanything/floor_detection"
-        os.makedirs(floor_save_dir, exist_ok=True)
-        
-        for method, result in floor_results.items():
-            if result['info']['success']:
-                # Save floor mask as image
-                floor_mask_img = (result['mask'] * 255).astype(np.uint8)
-                floor_pil = Image.fromarray(floor_mask_img, mode='L')
-                floor_pil.save(f"{floor_save_dir}/view_{view_idx:03d}_floor_{method}.png")
+            for method in methods:
+                floor_mask, floor_info = detect_floor_from_depth(depthmap_np, pts3d_np, valid_mask_np, method=method)
+                floor_results[method] = {'mask': floor_mask, 'info': floor_info}
                 
-                # Create colored overlay on original image for visualization
-                overlay = image_np.copy()
-                floor_overlay = result['mask'][:, :, np.newaxis] * np.array([0, 255, 0])  # Green overlay
-                overlay = np.where(result['mask'][:, :, np.newaxis], 
-                                 0.7 * overlay + 0.3 * floor_overlay, 
-                                 overlay).astype(np.uint8)
-                overlay_pil = Image.fromarray(overlay)
-                overlay_pil.save(f"{floor_save_dir}/view_{view_idx:03d}_floor_{method}_overlay.png")
-        
+                if floor_info['success']:
+                    print(f"  {method}: Success - {floor_info.get('num_floor_pixels', 0)} floor pixels")
+                else:
+                    print(f"  {method}: Failed")
+            
+            # Save floor detection results
+            floor_save_dir = "/tmp/mapanything/floor_detection"
+            os.makedirs(floor_save_dir, exist_ok=True)
+            
+            for method, result in floor_results.items():
+                if result['info']['success']:
+                    # Save floor mask as image
+                    floor_mask_img = (result['mask'] * 255).astype(np.uint8)
+                    floor_pil = Image.fromarray(floor_mask_img, mode='L')
+                    floor_pil.save(f"{floor_save_dir}/view_{view_idx:03d}_floor_{method}.png")
+                    
+                    # Create colored overlay on original image for visualization
+                    overlay = image_np.copy()
+                    floor_overlay = result['mask'][:, :, np.newaxis] * np.array([0, 255, 0])  # Green overlay
+                    overlay = np.where(result['mask'][:, :, np.newaxis], 
+                                     0.7 * overlay + 0.3 * floor_overlay, 
+                                     overlay).astype(np.uint8)
+                    overlay_pil = Image.fromarray(overlay)
+                    overlay_pil.save(f"{floor_save_dir}/view_{view_idx:03d}_floor_{method}_overlay.png")
+            
             # Save floor detection info as JSON
             floor_info_path = f"{floor_save_dir}/view_{view_idx:03d}_floor_info.json"
             serializable_floor_info = {}
@@ -474,6 +474,8 @@ def main():
             
             with open(floor_info_path, 'w') as f:
                 json.dump(serializable_floor_info, f, indent=2)
+        elif args.detect_floor and not FLOOR_DETECTION_AVAILABLE:
+            print(f"Skipping floor detection for view {view_idx} - required packages not available")
 
         # Save masks as images
         mask_save_dir = "/tmp/mapanything/masks"
