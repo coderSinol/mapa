@@ -108,14 +108,6 @@ def get_header_html(logo_base64=None):
     logo_src = logo_base64 or ""
 
     return f"""
-    <div style="display: flex; align-items: center; margin-bottom: 20px;">
-        <img src="{logo_src}" alt="WAI Logo" style="height: 40px; margin-right: 15px; {logo_style}">
-        <h1 style="margin: 0;"><span style="color: #ffb366;">MapAnything:</span> <span style="color: #555555;">Metric 3D Scene Reconstruction</span></h1>
-    </div>
-    <p>
-    <a href="https://github.com/facebookresearch/map-anything">🌟 GitHub Repository</a> |
-    <a href="https://map-anything.github.io/">🚀 Project Page</a>
-    </p>
     """
 
 
