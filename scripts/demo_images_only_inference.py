@@ -32,7 +32,7 @@ from mapanything.utils.viz import (
 # Import additional libraries for floor detection
 try:
     from scipy import ndimage
-    from sklearn.linear_model import RANSAC, LinearRegression
+    from sklearn.linear_model import RANSACRegressor, LinearRegression
     import cv2
     FLOOR_DETECTION_AVAILABLE = True
 except ImportError as e:
@@ -72,7 +72,7 @@ def detect_floor_from_depth(depthmap_np, pts3d_np, valid_mask, method='ransac'):
         
         # Fit plane using RANSAC
         # Floor is typically the largest horizontal plane
-        ransac = RANSAC(
+        ransac = RANSACRegressor(
             LinearRegression(),
             min_samples=3,
             residual_threshold=0.1,  # 10cm tolerance
