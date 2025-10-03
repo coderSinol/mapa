@@ -372,12 +372,12 @@ def populate_visualization_tabs(processed_data):
 
 
 # -------------------------------------------------------------------------
-# 2) Handle uploaded video/images --> produce target_dir + images
+# 2) Handle uploaded images --> produce target_dir + images
 # -------------------------------------------------------------------------
-def handle_uploads(input_video, input_images, s_time_interval=1.0):
+def handle_uploads(input_images):
     """
     Create a new 'target_dir' + 'images' subfolder, and place user-uploaded
-    images or extracted frames from video into it. Return (target_dir, image_paths).
+    images into it. Return (target_dir, image_paths).
     """
     start_time = time.time()
     gc.collect()
@@ -438,32 +438,6 @@ def handle_uploads(input_video, input_images, s_time_interval=1.0):
                 shutil.copy(file_path, dst_path)
                 image_paths.append(dst_path)
 
-    # --- Handle video ---
-    if input_video is not None:
-        if isinstance(input_video, dict) and "name" in input_video:
-            video_path = input_video["name"]
-        else:
-            video_path = input_video
-
-        vs = cv2.VideoCapture(video_path)
-        fps = vs.get(cv2.CAP_PROP_FPS)
-        frame_interval = int(fps * s_time_interval)  # 1 frame/sec
-
-        count = 0
-        video_frame_num = 0
-        while True:
-            gotit, frame = vs.read()
-            if not gotit:
-                break
-            count += 1
-            if count % frame_interval == 0:
-                image_path = os.path.join(
-                    target_dir_images, f"{video_frame_num:06}.png"
-                )
-                cv2.imwrite(image_path, frame)
-                image_paths.append(image_path)
-                video_frame_num += 1
-
     # Sort final images for gallery
     image_paths = sorted(image_paths)
 
@@ -477,15 +451,15 @@ def handle_uploads(input_video, input_images, s_time_interval=1.0):
 # -------------------------------------------------------------------------
 # 3) Update gallery on upload
 # -------------------------------------------------------------------------
-def update_gallery_on_upload(input_video, input_images, s_time_interval=1.0):
+def update_gallery_on_upload(input_images):
     """
-    Whenever user uploads or changes files, immediately handle them
+    Whenever user uploads files, immediately handle them
     and show in the gallery. Return (target_dir, image_paths).
     If nothing is uploaded, returns "None" and empty list.
     """
-    if not input_video and not input_images:
+    if not input_images:
         return None, None, None, None
-    target_dir, image_paths = handle_uploads(input_video, input_images, s_time_interval)
+    target_dir, image_paths = handle_uploads(input_images)
     return (
         None,
         target_dir,
@@ -1073,7 +1047,7 @@ def load_example_scene(scene_name, examples_dir="examples"):
         return None, None, None, "Scene not found"
 
     # Create target directory and copy images
-    target_dir, image_paths = handle_uploads(None, selected_scene["image_files"])
+    target_dir, image_paths = handle_uploads(selected_scene["image_files"])
 
     return (
         None,  # Clear reconstruction output
@@ -1103,16 +1077,6 @@ with gr.Blocks(theme=theme, css=GRADIO_CSS) as demo:
 
     with gr.Row():
         with gr.Column(scale=2):
-            # input_video = gr.Video(label="Upload Video", interactive=True)
-            # s_time_interval = gr.Slider(
-            #     minimum=0.1,
-            #     maximum=5.0,
-            #     value=1.0,
-            #     step=0.1,
-            #     label="Sample time interval (take a sample every x sec.)",
-            #     interactive=True,
-            #     visible=True,
-            # )
             input_images = gr.File(
                 file_count="multiple", label="Upload Images", interactive=True
             )
@@ -1216,7 +1180,6 @@ with gr.Blocks(theme=theme, css=GRADIO_CSS) as demo:
                 submit_btn = gr.Button("Reconstruct", scale=1, variant="primary")
                 clear_btn = gr.ClearButton(
                     [
-                        input_video,
                         input_images,
                         reconstruction_output,
                         log_output,
@@ -1467,14 +1430,9 @@ with gr.Blocks(theme=theme, css=GRADIO_CSS) as demo:
     # -------------------------------------------------------------------------
     # Auto-update gallery whenever user uploads or changes their files
     # -------------------------------------------------------------------------
-    input_video.change(
-        fn=update_gallery_on_upload,
-        inputs=[input_video, input_images, s_time_interval],
-        outputs=[reconstruction_output, target_dir_output, image_gallery, log_output],
-    )
     input_images.change(
         fn=update_gallery_on_upload,
-        inputs=[input_video, input_images, s_time_interval],
+        inputs=[input_images],
         outputs=[reconstruction_output, target_dir_output, image_gallery, log_output],
     )
 
